@@ -71,3 +71,22 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+
+## Firebase Setup
+
+1. Go to [Firebase Console](https://console.firebase.google.com/) and create a new project.
+2. In the project settings, add a new web app and copy the Firebase config.
+3. Replace the placeholder values in `src/lib/firebase.ts` with your actual Firebase config:
+
+```
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_AUTH_DOMAIN",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_STORAGE_BUCKET",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+```
+
+4. Enable Google sign-in (and any other providers you want) in the Firebase Authentication console.

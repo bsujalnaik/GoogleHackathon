@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { 
   Home, 
@@ -11,14 +11,38 @@ import {
   User,
   TrendingUp
 } from "lucide-react";
+import { auth } from "@/lib/firebase";
+import { GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { useUser } from "@/contexts/UserContext";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
 interface NavigationProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
+  onShowAuth?: () => void;
 }
 
-export const Navigation = ({ activeTab, onTabChange }: NavigationProps) => {
+export const Navigation = ({ activeTab, onTabChange, onShowAuth }: NavigationProps) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { user } = useUser();
+
+  const handleSignIn = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      // handle error (show toast, etc)
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      // handle error (show toast, etc)
+    }
+  };
 
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
@@ -26,6 +50,7 @@ export const Navigation = ({ activeTab, onTabChange }: NavigationProps) => {
     { id: 'chat', label: 'AI Chat', icon: MessageSquare },
     { id: 'notifications', label: 'Alerts', icon: Bell },
     { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'about', label: 'About Us', icon: User },
   ];
 
   return (
@@ -33,9 +58,7 @@ export const Navigation = ({ activeTab, onTabChange }: NavigationProps) => {
       {/* Desktop Navigation */}
       <nav className="hidden md:flex items-center justify-between p-6 bg-card/50 border-b border-border/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-gradient-primary flex items-center justify-center">
-            <TrendingUp className="w-6 h-6 text-white" />
-          </div>
+          <img src="/FinSightAI.png" alt="FinSight Logo" className="w-10 h-10 rounded-lg" />
           <div>
             <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
               FinSight
@@ -65,12 +88,32 @@ export const Navigation = ({ activeTab, onTabChange }: NavigationProps) => {
           })}
         </div>
 
-        <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" className="border-border/50">
+        {/* Auth Button */}
+        {user ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <div className="flex items-center gap-4 cursor-pointer focus:outline-none">
+                <Avatar className="h-12 w-12 border-4 border-white shadow-2xl bg-accent">
+                  <AvatarImage src={user.photoURL || undefined} alt={user.displayName || user.email || undefined} />
+                  <AvatarFallback className="text-lg font-bold bg-primary text-white">
+                    {user.displayName ? user.displayName[0] : (user.email ? user.email[0].toUpperCase() : "U")}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-base font-semibold text-foreground">
+                  {user.displayName || user.email || "User"}
+                </span>
+              </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleSignOut} className="text-red-600 font-semibold cursor-pointer">Log Out</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <Button variant="outline" size="sm" className="border-border/50" onClick={onShowAuth ? onShowAuth : handleSignIn}>
             <User className="w-4 h-4 mr-2" />
-            Profile
+            Sign In / Sign Up
           </Button>
-        </div>
+        )}
       </nav>
 
       {/* Mobile Navigation */}
@@ -120,12 +163,23 @@ export const Navigation = ({ activeTab, onTabChange }: NavigationProps) => {
                   </Button>
                 );
               })}
-              
               <div className="pt-6 border-t border-border/50">
-                <Button variant="outline" className="w-full justify-start gap-3 h-12 border-border/50">
-                  <User className="w-5 h-5" />
-                  Profile
-                </Button>
+                {user ? (
+                  <div className="flex items-center gap-2">
+                    <Avatar>
+                      <AvatarImage src={user.photoURL || undefined} alt={user.displayName || undefined} />
+                      <AvatarFallback>{user.displayName ? user.displayName[0] : "U"}</AvatarFallback>
+                    </Avatar>
+                    <Button variant="outline" className="w-full justify-start gap-3 h-12 border-border/50" onClick={handleSignOut}>
+                      Sign Out
+                    </Button>
+                  </div>
+                ) : (
+                  <Button variant="outline" className="w-full justify-start gap-3 h-12 border-border/50" onClick={onShowAuth ? onShowAuth : handleSignIn}>
+                    <User className="w-5 h-5" />
+                    Sign In / Sign Up
+                  </Button>
+                )}
               </div>
             </div>
           </div>

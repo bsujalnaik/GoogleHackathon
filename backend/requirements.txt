@@ -1,0 +1,7 @@
+# Backend dependencies for Stock & ITR Recommendation System
+Flask              # Web framework
+pandas             # Data manipulation
+numpy              # Numerical operations
+yfinance           # Yahoo Finance data fetch
+pandas_ta          # Technical analysis indicators
+reportlab          # PDF report generation (optional) 
