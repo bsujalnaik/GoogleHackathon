@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Welcome to your Lovable project
 
 ## Project info
@@ -90,3 +91,6 @@ const firebaseConfig = {
 ```
 
 4. Enable Google sign-in (and any other providers you want) in the Firebase Authentication console.
+=======
+# GoogleHackathon
+>>>>>>> c052651bb2266afce427beae9483693a7e8a54a1
