@@ -440,7 +440,8 @@ export const AIChat = ({ tabActiveKey }: AIChatProps) => {
 };
 
 export async function fetchVertexAIResponse(prompt: string): Promise<string> {
-  const apiKey = "AIzaSyDfXXKtmlQqwklfn3EYca7gug7CvaI98vY";
+  // Replace hardcoded apiKey with environment variable
+  const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
   const url = `https://generativelanguage.googleapis.com/v1beta3/models/chat-bison-001:generateMessage?key=${apiKey}`;
 
   const res = await fetch(url, {
