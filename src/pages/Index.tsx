@@ -48,10 +48,8 @@ const Index = () => {
         return <Dashboard />;
       case "chat":
         return (
-          <div className="min-h-screen bg-background p-6">
-            <div className="max-w-4xl mx-auto">
-              <AIChat />
-            </div>
+          <div className="min-h-screen bg-background px-0 md:px-4">
+            <AIChat />
           </div>
         );
       case "notifications":

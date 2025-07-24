@@ -135,3 +135,29 @@ All colors MUST be HSL.
     background: hsl(var(--primary) / 0.7);
   }
 }
+
+/* Hide scrollbar while maintaining functionality */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* Smooth transitions for tab changes */
+.TabsContent {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Better mobile tab styling */
+@media (max-width: 768px) {
+  .TabsList {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(24, 24, 27, 0.8);
+    backdrop-filter: blur(8px);
+  }
+}

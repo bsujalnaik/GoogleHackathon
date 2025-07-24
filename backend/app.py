@@ -1,10 +1,11 @@
 from flask import Flask, request, jsonify, send_file
-from stock import get_stock_data, get_technical_indicators
-from portfolio import get_portfolio, update_portfolio, delete_portfolio, create_portfolio
+from stock import get_stock_data, get_technical_indicators, recommend_stocks, stock_bp
+from portfolio import get_portfolio, update_portfolio, delete_portfolio, create_portfolio, get_portfolio_history
 from tax import calculate_tax, suggest_tax_savings, recommend_itr_form
 from report import generate_report
 
 app = Flask(__name__)
+app.register_blueprint(stock_bp)
 
 # --- STOCK DATA ENDPOINT ---
 @app.route('/api/stocks', methods=['GET'])
@@ -29,7 +30,10 @@ def portfolio():
     DELETE: Delete portfolio
     """
     if request.method == 'GET':
-        return jsonify(get_portfolio())
+        result = get_portfolio()
+        if isinstance(result, dict) and 'error' in result:
+            return jsonify({'error': result['error']}), 500
+        return jsonify(result)
     elif request.method == 'POST':
         return jsonify(create_portfolio(request.json))
     elif request.method == 'PUT':
@@ -37,14 +41,25 @@ def portfolio():
     elif request.method == 'DELETE':
         return jsonify(delete_portfolio(request.json))
 
+# --- PORTFOLIO HISTORY ENDPOINT ---
+@app.route('/api/portfolio/history', methods=['GET'])
+def portfolio_history():
+    """
+    Returns historical portfolio value for performance charts
+    """
+    return jsonify(get_portfolio_history())
+
 # --- RECOMMENDATIONS ENDPOINT ---
 @app.route('/api/recommendations', methods=['GET'])
 def recommendations():
     """
     Returns: smart stock recommendations based on technical analysis
     """
-    # TODO: Implement logic in stock.py
-    return jsonify({'recommendations': []})
+    # Recommend for all portfolio tickers
+    portfolio = get_portfolio()
+    tickers = [h['ticker'] for h in portfolio['holdings']]
+    recs = recommend_stocks(tickers)
+    return jsonify({'recommendations': recs})
 
 # --- TAX CALCULATION ENDPOINT ---
 @app.route('/api/tax', methods=['POST'])
@@ -68,6 +83,14 @@ def report():
     # TODO: Implement report generation
     file_path = generate_report()
     return send_file(file_path, as_attachment=True)
+
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({'error': 'Not found'}), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True) 

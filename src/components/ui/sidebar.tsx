@@ -196,7 +196,7 @@ const Sidebar = React.forwardRef<
           <SheetContent
             data-sidebar="sidebar"
             data-mobile="true"
-            className="w-[--sidebar-width] bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+            className="w-[--sidebar-width] bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden z-[60]"
             style={
               {
                 "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
@@ -759,3 +759,10 @@ export {
   SidebarTrigger,
   useSidebar,
 }
+
+// Fade-in animation utility (Tailwind CSS plugin or global style)
+// If using Tailwind, add this to your global CSS instead. For now, add a class for fade-in:
+
+// In your global CSS (e.g., index.css):
+// .animate-fade-in { animation: fadeIn 0.4s cubic-bezier(0.4,0,0.2,1); }
+// @keyframes fadeIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }

@@ -11,7 +11,7 @@ import {
   updateProfile,
 } from "firebase/auth";
 import { db } from "@/lib/firebase";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { User, Mail, Lock, Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react";
 import React, { useState } from "react";
@@ -42,8 +42,30 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onClose }) => {
     try {
       await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-      setSuccess("Signed in successfully!");
+      const result = await signInWithPopup(auth, provider);
+      
+      // Check if user exists in Firestore
+      const userDocRef = doc(db, "users", result.user.uid);
+      const userDoc = await getDoc(userDocRef);
+      
+      if (!userDoc.exists()) {
+        // New user - create account
+        await setDoc(userDocRef, {
+          email: result.user.email,
+          displayName: result.user.displayName,
+          photoURL: result.user.photoURL,
+          lastSignIn: new Date(),
+          createdAt: new Date(),
+        });
+        setSuccess("Welcome! Your account has been created successfully.");
+      } else {
+        // Existing user - update last sign in
+        await setDoc(userDocRef, {
+          lastSignIn: new Date(),
+        }, { merge: true });
+        setSuccess("Welcome back! Signed in successfully.");
+      }
+
       if (onClose) onClose();
     } catch (err: any) {
       setError(err.message || "Google sign-in failed");
@@ -101,32 +123,32 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onClose }) => {
   };
 
   return (
-    <div className="w-full max-w-md bg-card rounded-2xl shadow-xl border border-border/40 p-8 flex flex-col gap-6">
-      <div className="flex flex-col items-center gap-2">
-        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-2">
-          <User className="w-7 h-7 text-white" />
+    <div className="w-full max-w-[400px] bg-card rounded-xl shadow-xl border border-border/40 p-4 flex flex-col gap-3">
+      <div className="flex flex-col items-center">
+        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+          <User className="w-5 h-5 text-white" />
         </div>
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">
-          {mode === "signIn" ? "Sign In to FinSight" : "Create your FinSight Account"}
+        <h2 className="text-lg font-bold tracking-tight text-foreground mt-1.5">
+          {mode === "signIn" ? "Sign In to FinSight" : "Create Account"}
         </h2>
-        <p className="text-muted-foreground text-center text-sm">
+        <p className="text-muted-foreground text-center text-xs">
           {mode === "signIn"
-            ? "Welcome back! Sign in to access your dashboard."
-            : "Register to unlock personalized AI investment advice."}
+            ? "Welcome back! Sign in to continue."
+            : "Register to get started."}
         </p>
       </div>
-      {mode === "signUp" && (
-          <div className="mb-4">
+      <form className="flex flex-col gap-2.5" onSubmit={handleEmailAuth}>
+        {mode === "signUp" && (
+          <div className="mb-1.5">
             <label
               htmlFor="name"
-              className="block text-sm font-medium text-neutral-200 mb-1"
+              className="block text-xs font-medium text-neutral-200 mb-1"
             >
               Name
             </label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none">
-                {/* user icon */}
-                <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none">
+                <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <circle cx="12" cy="8" r="4" />
                   <path d="M2 20c0-4 8-6 10-6s10 2 10 6" />
                 </svg>
@@ -137,7 +159,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onClose }) => {
                 autoComplete="name"
                 required
                 disabled={loading}
-                className="w-full pl-10 pr-4 py-2 rounded-lg bg-neutral-900 border border-neutral-700 text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary/50 transition"
+                className="w-full pl-8 pr-2.5 py-1.5 rounded-md bg-neutral-900 border border-neutral-700 text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-primary/50 transition text-xs h-8"
                 placeholder="Your name"
                 value={name}
                 onChange={e => setName(e.target.value)}
@@ -145,19 +167,18 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onClose }) => {
             </div>
           </div>
         )}
-      <form className="flex flex-col gap-4" onSubmit={handleEmailAuth}>
+        
         {/* Email Field */}
-        <div className="mb-4">
+        <div className="mb-1.5">
           <label
             htmlFor="email"
-            className="block text-sm font-medium text-neutral-200 mb-1"
+            className="block text-xs font-medium text-neutral-200 mb-1"
           >
             Email
           </label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none">
-              {/* mail icon */}
-              <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none">
+              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <rect x="3" y="5" width="18" height="14" rx="2" />
                 <polyline points="3 7 12 13 21 7" />
               </svg>
@@ -168,7 +189,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onClose }) => {
               autoComplete="email"
               required
               disabled={loading}
-              className="w-full pl-10 pr-4 py-2 rounded-lg bg-neutral-900 border border-neutral-700 text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary/50 transition"
+              className="w-full pl-8 pr-2.5 py-1.5 rounded-md bg-neutral-900 border border-neutral-700 text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-primary/50 transition text-xs h-8"
               placeholder="you@email.com"
               value={email}
               onChange={e => setEmail(e.target.value)}
@@ -177,17 +198,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onClose }) => {
         </div>
 
         {/* Password Field */}
-        <div className="mb-4">
+        <div className="mb-1.5">
           <label
             htmlFor="password"
-            className="block text-sm font-medium text-neutral-200 mb-1"
+            className="block text-xs font-medium text-neutral-200 mb-1"
           >
             Password
           </label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none">
-              {/* lock icon */}
-              <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none">
+              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <rect x="3" y="11" width="18" height="10" rx="2" />
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
@@ -198,7 +218,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onClose }) => {
               autoComplete={mode === "signUp" ? "new-password" : "current-password"}
               required
               disabled={loading}
-              className="w-full pl-10 pr-10 py-2 rounded-lg bg-neutral-900 border border-neutral-700 text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary/50 transition"
+              className="w-full pl-8 pr-8 py-1.5 rounded-md bg-neutral-900 border border-neutral-700 text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-primary/50 transition text-xs h-8"
               placeholder="Password"
               value={password}
               onChange={e => setPassword(e.target.value)}
@@ -207,22 +227,22 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onClose }) => {
               type="button"
               tabIndex={-1}
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300 transition"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300 transition"
             >
-              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
             </button>
           </div>
         </div>
 
         {/* Remember Me & Forgot Password */}
         {mode === "signIn" && (
-          <div className="flex justify-between items-center text-sm">
-            <label className="flex items-center gap-2 text-neutral-400 cursor-pointer">
+          <div className="flex justify-between items-center text-xs mb-1.5">
+            <label className="flex items-center gap-1.5 text-neutral-400 cursor-pointer">
               <input
                 type="checkbox"
                 checked={rememberMe}
                 onChange={e => setRememberMe(e.target.checked)}
-                className="h-4 w-4 rounded border-neutral-600 bg-neutral-800 text-primary focus:ring-primary/50"
+                className="h-3.5 w-3.5 rounded border-neutral-600 bg-neutral-800 text-primary focus:ring-primary/50"
               />
               Remember me
             </label>
@@ -239,31 +259,31 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onClose }) => {
 
         {/* Error/Success Messages */}
         {error && (
-          <div className="flex items-center gap-2 text-red-400 bg-red-900/20 border border-red-500/30 rounded-lg p-3 text-sm">
-            <AlertCircle size={18} />
+          <div className="flex items-center gap-2 text-red-400 bg-red-900/20 border border-red-500/30 rounded-md p-2 text-xs">
+            <AlertCircle size={14} />
             <span>{error}</span>
           </div>
         )}
         {success && (
-          <div className="flex items-center gap-2 text-green-400 bg-green-900/20 border border-green-500/30 rounded-lg p-3 text-sm">
-            <CheckCircle size={18} />
+          <div className="flex items-center gap-2 text-green-400 bg-green-900/20 border border-green-500/30 rounded-md p-2 text-xs">
+            <CheckCircle size={14} />
             <span>{success}</span>
           </div>
         )}
 
         {/* Submit Button */}
-        <Button type="submit" disabled={loading} className="w-full font-bold py-3 text-base">
+        <Button type="submit" disabled={loading} className="w-full font-medium py-1 text-xs h-8">
           {loading ? "Processing..." : (mode === "signIn" ? "Sign In" : "Create Account")}
         </Button>
       </form>
 
       {/* Divider */}
-      <div className="relative my-2">
+      <div className="relative my-1">
         <div className="absolute inset-0 flex items-center">
           <span className="w-full border-t border-neutral-700" />
         </div>
         <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-card px-2 text-neutral-500">Or continue with</span>
+          <span className="bg-card px-2 text-neutral-500">Or</span>
         </div>
       </div>
 
@@ -272,9 +292,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onClose }) => {
         variant="outline"
         onClick={handleGoogleSignIn}
         disabled={loading}
-        className="w-full flex items-center justify-center gap-2"
+        className="w-full flex items-center justify-center gap-2 h-8 text-xs font-medium"
       >
-        <svg className="w-5 h-5" viewBox="0 0 48 48">
+        <svg className="w-4 h-4" viewBox="0 0 48 48">
           <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z" />
           <path fill="#FF3D00" d="m6.306 14.691 6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z" />
           <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.222 0-9.618-3.67-11.283-8.591l-6.522 5.025C9.505 39.556 16.227 44 24 44z" />
@@ -284,7 +304,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onClose }) => {
       </Button>
 
       {/* Switch Mode */}
-      <p className="text-center text-sm text-neutral-400">
+      <p className="text-center text-xs text-neutral-400">
         {mode === "signIn" ? "Don't have an account?" : "Already have an account?"}{" "}
         <button
           onClick={() => setMode(mode === "signIn" ? "signUp" : "signIn")}

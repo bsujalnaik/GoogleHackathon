@@ -9,13 +9,17 @@ import {
   Menu,
   X,
   User,
-  TrendingUp
+  TrendingUp,
+  LogOut
 } from "lucide-react";
 import { auth } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
+import { doc, setDoc, getDoc } from "firebase/firestore";
 import { GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useUser } from "@/contexts/UserContext";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
 
 interface NavigationProps {
   activeTab: string;
@@ -26,13 +30,46 @@ interface NavigationProps {
 export const Navigation = ({ activeTab, onTabChange, onShowAuth }: NavigationProps) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { user } = useUser();
+  const { toast } = useToast();
 
   const handleSignIn = async () => {
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      // handle error (show toast, etc)
+      const result = await signInWithPopup(auth, provider);
+      
+      // Check if user exists in Firestore
+      const userDocRef = doc(db, "users", result.user.uid);
+      const userDoc = await getDoc(userDocRef);
+      
+      if (!userDoc.exists()) {
+        // New user - create account
+        await setDoc(userDocRef, {
+          email: result.user.email,
+          displayName: result.user.displayName,
+          photoURL: result.user.photoURL,
+          lastSignIn: new Date(),
+          createdAt: new Date(),
+        });
+        toast({
+          title: "Welcome to FinSight!",
+          description: "Your account has been created successfully.",
+        });
+      } else {
+        // Existing user - update last sign in
+        await setDoc(userDocRef, {
+          lastSignIn: new Date(),
+        }, { merge: true });
+        toast({
+          title: "Welcome back!",
+          description: "Signed in successfully.",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to sign in with Google",
+        variant: "destructive",
+      });
     }
   };
 
@@ -104,8 +141,14 @@ export const Navigation = ({ activeTab, onTabChange, onShowAuth }: NavigationPro
                 </span>
               </div>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleSignOut} className="text-red-600 font-semibold cursor-pointer">Log Out</DropdownMenuItem>
+            <DropdownMenuContent align="end" className="bg-zinc-900/80 border border-zinc-700 shadow-xl rounded-2xl p-3 backdrop-blur-md">
+              <DropdownMenuItem
+                onClick={handleSignOut}
+                className="group flex items-center gap-2 px-3 py-1.5 rounded-lg bg-transparent hover:bg-zinc-800/80 hover:shadow-red-500/20 hover:text-red-400 hover:scale-105 transition-all duration-200 text-red-500 font-medium cursor-pointer text-sm min-w-[140px] border-none shadow-none focus:bg-zinc-800/80 focus:text-red-400"
+              >
+                <LogOut className="w-4 h-4 text-red-500 group-hover:text-red-400 group-hover:scale-110 transition-all duration-200" />
+                <span>Log Out</span>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
@@ -170,9 +213,14 @@ export const Navigation = ({ activeTab, onTabChange, onShowAuth }: NavigationPro
                       <AvatarImage src={user.photoURL || undefined} alt={user.displayName || undefined} />
                       <AvatarFallback>{user.displayName ? user.displayName[0] : "U"}</AvatarFallback>
                     </Avatar>
-                    <Button variant="outline" className="w-full justify-start gap-3 h-12 border-border/50" onClick={handleSignOut}>
-                      Sign Out
-                    </Button>
+                   <Button
+                     variant="outline"
+                     className="w-full justify-start gap-3 h-12 border-none bg-zinc-900/80 text-red-500 font-semibold rounded-2xl shadow-xl hover:bg-zinc-800/80 hover:shadow-red-500/20 hover:text-red-400 hover:scale-105 transition-all duration-200 text-base backdrop-blur-md focus:bg-zinc-800/80 focus:text-red-400"
+                     onClick={handleSignOut}
+                   >
+                     <LogOut className="w-5 h-5 text-red-500 group-hover:text-red-400 transition-all duration-200" />
+                     Log Out
+                   </Button>
                   </div>
                 ) : (
                   <Button variant="outline" className="w-full justify-start gap-3 h-12 border-border/50" onClick={onShowAuth ? onShowAuth : handleSignIn}>

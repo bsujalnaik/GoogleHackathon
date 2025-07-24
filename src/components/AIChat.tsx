@@ -1,98 +1,97 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Bot, User, Send, BarChart2, LogIn } from "lucide-react";
+import { Bot, User, Send, LogIn, MessageSquare, History, Settings as SettingsIcon, CircleDot, Menu } from "lucide-react";
 import { auth } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
+import { doc, setDoc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+import { useToast } from "@/hooks/use-toast";
 import {
-  getFirestore,
-  collection,
-  addDoc,
-  query,
-  orderBy,
-  onSnapshot,
-  serverTimestamp,
-} from "firebase/firestore";
-import { ChartContainer } from "@/components/ui/chart";
+  SidebarProvider,
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarTrigger,
+  SidebarInset
+} from "@/components/ui/sidebar";
+
+interface AIChatProps {
+  tabActiveKey?: string;
+}
 
 interface Message {
   id: string;
   type: "ai" | "user";
   content: string;
   timestamp: Date;
-  suggestions?: string[];
-  showChart?: boolean;
 }
 
-const db = getFirestore();
 const FREE_TRIAL_LIMIT = 3;
 
-export const AIChat = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
+export const AIChat = ({ tabActiveKey }: AIChatProps) => {
+  const [messages, setMessages] = useState<Message[]>([{
+    id: "welcome",
+    type: "ai",
+    content: "Hello! I'm your FinSight AI advisor. Ask me anything about your investments or taxes.",
+    timestamp: new Date(),
+  }]);
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [user, setUser] = useState<any>(null);
-  const [showChart, setShowChart] = useState(false);
   const [freeTrialCount, setFreeTrialCount] = useState(0);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const prevMessagesLength = useRef(messages.length);
+  const [sidebarOpen, setSidebarOpen] = useState(true); // Desktop sidebar toggle
+  const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
+  // Use messages to generate previousChats (excluding welcome message)
+  const previousChats = messages
+    .filter((msg) => msg.type === 'user' && msg.id !== 'welcome')
+    .slice(-15)
+    .map((msg) => ({
+      id: msg.id,
+      preview: msg.content.slice(0, 40) + (msg.content.length > 40 ? '...' : ''),
+    }));
 
-  // Listen for auth state
+  // Sidebar: Show last 20 messages (user and AI) as a running list
+  const sidebarMessages = messages
+    .filter((msg) => msg.id !== 'welcome')
+    .slice(-20)
+    .map((msg) => ({
+      id: msg.id,
+      type: msg.type,
+      preview: msg.content.slice(0, 40) + (msg.content.length > 40 ? '...' : ''),
+    }));
+
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+
+  const handleNewChat = () => {
+    setMessages([
+      {
+        id: "welcome",
+        type: "ai",
+        content: "Hello! I'm your FinSight AI advisor. Ask me anything about your investments or taxes.",
+        timestamp: new Date(),
+      },
+    ]);
+    setInputValue("");
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
-      if (firebaseUser) {
-        setShowAuthPrompt(false);
-      }
+      if (firebaseUser) setShowAuthPrompt(false);
     });
     return () => unsubscribe();
   }, []);
-
-  // Load chat history from Firestore
-  useEffect(() => {
-    if (!user) return;
-    const q = query(
-      collection(db, "chats", user.uid, "messages"),
-      orderBy("createdAt", "asc")
-    );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const loaded: Message[] = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          type: data.type,
-          content: data.content,
-          timestamp: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
-          suggestions: data.suggestions || undefined,
-          showChart: data.showChart || false,
-        };
-      });
-      setMessages(loaded.length > 0 ? loaded : [getWelcomeMessage()]);
-    });
-    return () => unsubscribe();
-  }, [user]);
-
-  // Scroll to bottom on new message
-  useEffect(() => {
-    if (messages.length > 1) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages]);
-
-  const getWelcomeMessage = (): Message => ({
-    id: "welcome",
-    type: "ai",
-    content:
-      "Hello! I'm your FinSight AI advisor. You can try 3 free messages before signing in. I can help you optimize your portfolio, find tax-saving opportunities, and answer investment questions. What would you like to know?",
-    timestamp: new Date(),
-    suggestions: [
-      "Should I sell my RELIANCE stocks?",
-      "What's my tax liability this year?",
-      "Find tax-loss harvesting opportunities",
-      "Show me a chart",
-    ],
-  });
 
   const handleSendMessage = async (content: string) => {
     if (!content.trim()) return;
@@ -100,259 +99,349 @@ export const AIChat = () => {
       setShowAuthPrompt(true);
       return;
     }
-    const userMsg: Omit<Message, "id"> = {
+    setInputValue("");
+    setIsTyping(true);
+    const userMsg: Message = {
+      id: Date.now().toString(),
       type: "user",
       content,
       timestamp: new Date(),
     };
-    setInputValue("");
-    setIsTyping(true);
-    if (user) {
-      // Save user message to Firestore
-      await addDoc(collection(db, "chats", user.uid, "messages"), {
-        ...userMsg,
-        createdAt: serverTimestamp(),
-      });
-    } else {
-      setMessages((prev) => [...prev, { ...userMsg, id: Date.now().toString() }]);
-      setFreeTrialCount((c) => c + 1);
-    }
-    // Fetch AI response from Vertex AI
+    setMessages((prev) => [...prev, userMsg]);
     try {
       const aiContent = await fetchVertexAIResponse(content);
-      const aiMsg: Omit<Message, "id"> = {
+      const aiMsg: Message = {
+        id: (Date.now() + 1).toString(),
         type: "ai",
         content: aiContent,
         timestamp: new Date(),
-        suggestions: [
-          "Analyze my risk profile",
-          "Show portfolio allocation",
-          "Find rebalancing opportunities",
-          "Show me a chart",
-        ],
       };
-      if (user) {
-        await addDoc(collection(db, "chats", user.uid, "messages"), {
-          ...aiMsg,
-          createdAt: serverTimestamp(),
-        });
-      } else {
-        setMessages((prev) => [...prev, { ...aiMsg, id: (Date.now() + 1).toString() }]);
-        if (aiMsg.showChart) setShowChart(true);
-        if (freeTrialCount + 1 >= FREE_TRIAL_LIMIT) {
-          setTimeout(() => setShowAuthPrompt(true), 500);
-        }
-      }
-      setIsTyping(false);
-      if (aiMsg.showChart) setShowChart(true);
-    } catch (err) {
-      // fallback to local response if API fails
-      const aiMsg = generateAIResponse(content);
-      if (user) {
-        await addDoc(collection(db, "chats", user.uid, "messages"), {
-          ...aiMsg,
-          createdAt: serverTimestamp(),
-        });
-      } else {
-        setMessages((prev) => [...prev, { ...aiMsg, id: (Date.now() + 1).toString() }]);
-        if (aiMsg.showChart) setShowChart(true);
-        if (freeTrialCount + 1 >= FREE_TRIAL_LIMIT) {
-          setTimeout(() => setShowAuthPrompt(true), 500);
-        }
-      }
-      setIsTyping(false);
-      if (aiMsg.showChart) setShowChart(true);
-    }
-  };
-
-  const generateAIResponse = (content: string): Omit<Message, "id"> => {
-    if (content.toLowerCase().includes("chart")) {
-      return {
+      setMessages((prev) => [...prev, aiMsg]);
+    } catch {
+      setMessages((prev) => [...prev, {
+        id: (Date.now() + 2).toString(),
         type: "ai",
-        content: "Here is a chart based on your portfolio data.",
+        content: "Sorry, I couldn't generate a response.",
         timestamp: new Date(),
-        showChart: true,
-      };
+      }]);
     }
-    return {
-      type: "ai",
-      content:
-        "I understand you're asking about portfolio optimization. Let me analyze your current holdings and market conditions to provide personalized advice. Based on your risk profile and investment goals, I recommend focusing on tax-efficient strategies.",
-      timestamp: new Date(),
-      suggestions: [
-        "Analyze my risk profile",
-        "Show portfolio allocation",
-        "Find rebalancing opportunities",
-        "Show me a chart",
-      ],
-    };
+    setIsTyping(false);
+    if (!user) setFreeTrialCount((c) => c + 1);
   };
-
-  const handleSuggestionClick = (suggestion: string) => {
-    handleSendMessage(suggestion);
-  };
-
-  // Example chart data
-  const chartData = [
-    { name: "RELIANCE", value: 1200000 },
-    { name: "TCS", value: 950000 },
-    { name: "HDFCBANK", value: 800000 },
-    { name: "INFY", value: 700000 },
-    { name: "ICICIBANK", value: 600000 },
-  ];
 
   const handleSignIn = async () => {
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      // handle error (show toast, etc)
+      const result = await signInWithPopup(auth, provider);
+      
+      // Check if user exists in Firestore
+      const userDocRef = doc(db, "users", result.user.uid);
+      const userDoc = await getDoc(userDocRef);
+      
+      if (!userDoc.exists()) {
+        // New user - create account
+        await setDoc(userDocRef, {
+          email: result.user.email,
+          displayName: result.user.displayName,
+          photoURL: result.user.photoURL,
+          lastSignIn: new Date(),
+          createdAt: new Date(),
+        });
+        toast({
+          title: "Welcome to FinSight!",
+          description: "Your account has been created successfully.",
+        });
+      } else {
+        // Existing user - update last sign in
+        await setDoc(userDocRef, {
+          lastSignIn: new Date(),
+        }, { merge: true });
+        toast({
+          title: "Welcome back!",
+          description: "Signed in successfully.",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to sign in with Google",
+        variant: "destructive",
+      });
     }
   };
 
   const isInputDisabled = isTyping || (!user && freeTrialCount >= FREE_TRIAL_LIMIT);
 
   return (
-    <div className="flex flex-col h-full min-h-[calc(100vh-80px)] w-full bg-background">
-      {/* Header */}
-      <div className="flex flex-col items-center justify-center w-full mt-6 gap-3 px-4">
-        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-2">
-          <Bot className="w-9 h-9 text-white" />
-        </div>
-        <div className="flex flex-col items-center">
-          <div className="flex items-center gap-3">
-            <h3 className="font-bold text-3xl text-foreground">FinSight AI</h3>
-            <span className="inline-block bg-green-500 text-white text-sm font-semibold px-4 py-1 rounded-full shadow">Online</span>
-          </div>
-          <p className="text-base text-muted-foreground mt-1">Your personal tax advisor</p>
-        </div>
-      </div>
-      {/* Chat/Chart Area */}
-      <div className="flex-1 flex flex-col justify-end w-full overflow-y-auto">
-        {showChart ? (
-          <div className="flex-1 flex flex-col items-center justify-center w-full">
-            <div className="w-full h-[400px] bg-card rounded-xl shadow-lg flex items-center justify-center mt-8">
-              <ChartContainer config={{ portfolio: { color: 'hsl(235,100%,65%)', label: 'Portfolio' } }}>
-                {/* Example chart placeholder, replace with actual chart */}
-                <svg width="100%" height="100%">
-                  <rect x="40" y="100" width="60" height="200" fill="#6366f1" rx="8" />
-                  <rect x="120" y="150" width="60" height="150" fill="#818cf8" rx="8" />
-                  <rect x="200" y="180" width="60" height="120" fill="#a5b4fc" rx="8" />
-                  <rect x="280" y="200" width="60" height="100" fill="#c7d2fe" rx="8" />
-                  <rect x="360" y="220" width="60" height="80" fill="#e0e7ff" rx="8" />
-                </svg>
-              </ChartContainer>
+    <SidebarProvider>
+      <div className="flex h-screen w-full bg-gradient-to-br from-background to-zinc-900">
+        {/* Desktop Sidebar */}
+        <div className="hidden md:flex flex-col" style={{ width: 250 }}>
+        {sidebarOpen && (
+            <div className="w-full flex-shrink-0 border-r border-border bg-card/90 shadow-lg flex flex-col h-full">
+              <div className="flex items-center justify-between font-bold text-base px-4 py-3 border-b border-border">
+                <span className="flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-primary" />
+                  FinSight AI
+                </span>
+            <button
+                  className="p-1 rounded-full hover:bg-accent/50"
+              onClick={() => setSidebarOpen(false)}
+              aria-label="Close sidebar"
+            >
+              <Menu className="w-6 h-6 text-muted-foreground" />
+            </button>
+              </div>
+              {/* User avatar and name */}
+              {user && (
+                <div className="flex items-center gap-3 px-4 py-3 border-b border-border/60 bg-background/80">
+                  <img src={user.photoURL} alt="User avatar" className="w-8 h-8 rounded-full border border-border" />
+                  <span className="font-medium text-sm text-foreground truncate">{user.displayName || user.email}</span>
+                </div>
+              )}
+              <div className="flex-1 overflow-y-auto">
+                <nav className="flex flex-col gap-1 px-2 py-2">
+                  <button
+                    className="flex items-center gap-2 text-left py-2 px-3 rounded-lg hover:bg-primary/10 font-medium transition group text-sm"
+                    onClick={handleNewChat}
+                  >
+                  <MessageSquare className="w-4 h-4 text-primary group-hover:scale-110 transition" />
+                  New Chat
+                </button>
+              </nav>
+                <div className="px-2"><div className="my-1 border-t border-border/60" /></div>
+                <div className="px-2 pb-2">
+                  <div className="text-xs text-muted-foreground font-semibold mb-1 mt-1 px-1">Previous Chats</div>
+                <div className="flex flex-col gap-0.5">
+                    {previousChats.length === 0 ? (
+                      <span className="text-sm text-muted-foreground px-2 py-2">No previous chats.</span>
+                    ) : (
+                      previousChats.map(chat => (
+                    <button
+                      key={chat.id}
+                      onClick={() => setSelectedChatId(chat.id)}
+                          className={`flex items-start gap-2 px-2 py-2 rounded-lg transition text-left w-full border-l-4 group text-sm ${
+                            selectedChatId === chat.id
+                          ? 'bg-primary/10 border-primary shadow-sm'
+                              : 'bg-transparent border-transparent hover:bg-accent/20 hover:border-primary/60'
+                          }`}
+                    >
+                          <Bot className="w-4 h-4 mt-0.5 text-muted-foreground group-hover:text-primary transition flex-shrink-0" />
+                          <span className="truncate text-sm text-foreground group-hover:text-primary min-w-0">
+                        {chat.preview}
+                      </span>
+                    </button>
+                      ))
+                    )}
+                </div>
+              </div>
             </div>
           </div>
-        ) :
-          <div className="flex-1 flex flex-col justify-end w-full overflow-y-auto">
-            <div className="flex flex-col gap-8 px-8 py-8 w-full">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.type === "user" ? "justify-end" : "justify-start"} w-full`}
-                >
-                  {message.type === "ai" && (
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mr-4">
-                      <Bot className="w-6 h-6 text-white" />
-                    </div>
-                  )}
-                  <div
-                    className={`rounded-2xl px-7 py-5 text-lg shadow-lg max-w-3xl w-full ${
-                      message.type === "ai"
-                        ? "bg-background/90 text-foreground border border-border/30"
-                        : "bg-primary text-white border border-primary/30"
-                    }`}
+        )}
+        {!sidebarOpen && (
+          <button
+              className="p-2 rounded-lg hover:bg-accent/50"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open sidebar"
+          >
+            <Menu className="w-6 h-6 text-primary" />
+          </button>
+        )}
+        </div>
+
+        {/* Mobile Sidebar */}
+        <div className="md:hidden">
+          {/* Hamburger Menu Button */}
+          <div 
+            className="absolute top-[72px] left-4 z-50 cursor-pointer"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+          >
+            <Menu className="w-6 h-6 text-primary hover:text-primary/80 transition-colors" />
+          </div>
+
+          {/* Sidebar Overlay */}
+          {sidebarOpen && (
+            <div className="fixed inset-0 z-40">
+              <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
+              <div 
+                className="absolute left-0 top-[64px] w-64 bg-card/90 shadow-lg flex flex-col"
+                style={{ 
+                  height: 'calc(100vh - 64px - 96px)',
+                  maxHeight: 'calc(100vh - 64px - 96px)'
+                }}
+              >
+                <div className="flex items-center justify-between font-bold text-base px-4 py-3 border-b border-border">
+                  <span className="flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-primary" />
+                    FinSight AI
+                  </span>
+                  <button
+                    className="p-1 rounded-full hover:bg-accent/50"
+                    onClick={() => setSidebarOpen(false)}
+                    aria-label="Close sidebar"
                   >
-                    {message.content}
-                    {message.suggestions && (
-                      <div className="flex flex-wrap gap-3 mt-4">
-                        {message.suggestions.map((s, i) => (
-                          <Button
-                            key={i}
-                            variant="outline"
-                            size="sm"
-                            className="rounded-full border-border/40 text-sm px-4 py-2 hover:bg-primary/10 hover:text-primary transition"
-                            onClick={() => handleSuggestionClick(s)}
+                    <Menu className="w-6 h-6 text-muted-foreground" />
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto">
+                  <nav className="flex flex-col gap-1 px-2 py-2">
+                    <button
+                      className="flex items-center gap-2 text-left py-2 px-3 rounded-lg hover:bg-primary/10 font-medium transition group text-sm"
+                      onClick={() => {
+                        handleNewChat();
+                        setSidebarOpen(false);
+                      }}
+                    >
+                      <MessageSquare className="w-4 h-4 text-primary group-hover:scale-110 transition" />
+                      New Chat
+                    </button>
+                  </nav>
+                  <div className="px-2"><div className="my-1 border-t border-border/60" /></div>
+                  <div className="px-2 pb-2">
+                    <div className="text-xs text-muted-foreground font-semibold mb-1 mt-1 px-1">Previous Chats</div>
+                    <div className="flex flex-col gap-0.5">
+                      {previousChats.length === 0 ? (
+                        <span className="text-sm text-muted-foreground px-2 py-2">No previous chats.</span>
+                      ) : (
+                        previousChats.map(chat => (
+                          <button
+                            key={chat.id}
+                            onClick={() => {
+                              setSelectedChatId(chat.id);
+                              setSidebarOpen(false);
+                            }}
+                            className={`flex items-start gap-2 px-2 py-2 rounded-lg transition text-left w-full border-l-4 group text-sm ${
+                              selectedChatId === chat.id
+                                ? 'bg-primary/10 border-primary shadow-sm'
+                                : 'bg-transparent border-transparent hover:bg-accent/20 hover:border-primary/60'
+                            }`}
                           >
-                            {s}
-                          </Button>
-                        ))}
+                            <Bot className="w-4 h-4 mt-0.5 text-muted-foreground group-hover:text-primary transition flex-shrink-0" />
+                            <span className="truncate text-sm text-foreground group-hover:text-primary min-w-0">
+                              {chat.preview}
+                            </span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Main Chat Area */}
+        <div className="flex-1 flex flex-col h-full w-full min-h-0 px-0 md:px-8 py-2 md:py-6">
+          <div className="relative flex flex-col items-center justify-center gap-1 py-2 px-4 border-b border-border/20">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg">
+              <Bot className="w-6 h-6 text-white" />
+            </div>
+            <h3 className="font-bold text-lg text-foreground">FinSight AI</h3>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              <span className="text-xs text-green-500 font-medium">Online</span>
+            </div>
+        </div>
+
+        {/* Chat Area + Input Bar (sticky bottom) */}
+        <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex-1 flex flex-col gap-1 px-2 md:px-6 py-1 overflow-y-auto w-full min-h-[50px]" tabIndex={0} aria-label="Chat messages area">
+            <div className="w-full">
+              {messages.map((message, idx) => {
+                return (
+                  <div
+                    key={message.id}
+                    className={`flex ${message.type === "user" ? "justify-end" : "justify-start"} items-end animate-fade-in mb-1 group`}
+                    style={{ animationDelay: `${idx * 0.05}s` }}
+                    tabIndex={0}
+                    aria-label={message.type === "user" ? "Your message" : "AI message"}
+                  >
+                    {message.type === "ai" && (
+                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mr-2 flex-shrink-0 shadow-md">
+                        <Bot className="w-4 h-4 text-white" />
+                      </div>
+                    )}
+                    <div
+                      className={`rounded-2xl px-4 py-2 text-sm shadow-lg break-words relative transition-all duration-200 ${
+                        message.type === "ai"
+                          ? "bg-gradient-to-br from-background/90 to-accent/10 text-foreground border border-border/30"
+                          : "bg-primary text-primary-foreground"
+                      }`}
+                      style={{ width: 'fit-content', maxWidth: '90%' }}
+                    >
+                      {message.content}
+                      <span className="block text-[10px] text-muted-foreground mt-1 text-right opacity-80 select-none">
+                        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    {message.type === "user" && (
+                      <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center ml-2 flex-shrink-0 shadow-md">
+                        {user && user.photoURL ? (
+                          <img src={user.photoURL} alt="User avatar" className="w-5 h-5 rounded-full" />
+                        ) : (
+                          <User className="w-4 h-4 text-muted-foreground" />
+                        )}
                       </div>
                     )}
                   </div>
-                  {message.type === "user" && (
-                    <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center ml-4">
-                      <User className="w-6 h-6 text-muted-foreground" />
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
               {isTyping && (
-                <div className="flex gap-4 justify-start items-center w-full">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                    <Bot className="w-6 h-6 text-white" />
+                <div className="flex gap-2 items-center animate-fade-in mb-1">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center flex-shrink-0 shadow-md">
+                    <Bot className="w-4 h-4 text-white" />
                   </div>
-                  <div className="bg-background/80 border border-border/50 px-7 py-5 rounded-2xl flex items-center gap-3">
-                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" />
-                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
-                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
+                  <div className="bg-background/90 border border-border/50 px-3 py-2 rounded-2xl flex items-center gap-1 shadow-md">
+                    <div className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" />
+                    <div className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
+                    <div className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
                   </div>
                 </div>
               )}
-              <div ref={messagesEndRef} />
+              <div ref={messagesEndRef} className="h-px" />
             </div>
           </div>
-        }
-      </div>
-      {/* Input Area */}
-      <form
-        className="flex items-center gap-4 px-4 py-6 w-full bg-transparent border-t border-border/50 justify-center"
-        style={{ position: 'sticky', bottom: 0, background: 'transparent' }}
-        onSubmit={e => {
-          e.preventDefault();
-          handleSendMessage(inputValue);
-        }}
-      >
-        <div className="w-full max-w-3xl flex items-center gap-4">
-          <Input
-            value={inputValue}
-            onChange={e => setInputValue(e.target.value)}
-            placeholder="Ask about your investments, tax optimization..."
-            className="flex-1 bg-background/80 border-border/50 rounded-full px-8 h-16 text-lg focus:ring-2 focus:ring-primary/30 transition"
-            disabled={isInputDisabled}
-          />
-          <Button
-            type="submit"
-            className="bg-gradient-primary hover:opacity-90 rounded-full shadow-lg px-8 h-16 text-lg"
-            disabled={!inputValue.trim() || isInputDisabled}
-          >
-            <Send className="w-7 h-7" />
-          </Button>
-        </div>
-      </form>
-      {/* Auth Prompt */}
-      {showAuthPrompt && !user && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="bg-card rounded-2xl shadow-2xl p-8 flex flex-col items-center gap-6 border border-border/40 max-w-sm w-full">
-            <LogIn className="w-10 h-10 text-primary mb-2" />
-            <h2 className="text-xl font-bold text-foreground text-center">Sign In / Sign Up Required</h2>
-            <p className="text-muted-foreground text-center">You have used your 3 free messages. Please sign in to continue chatting and save your history.</p>
-            <Button onClick={handleSignIn} className="w-full bg-gradient-primary text-white font-semibold rounded-lg shadow hover:opacity-90 transition-all duration-200 flex items-center justify-center gap-2">
-              <LogIn className="w-5 h-5" />
-              Continue with Google
-            </Button>
-            <Button variant="ghost" onClick={() => setShowAuthPrompt(false)} className="w-full">Cancel</Button>
+          {/* Floating Input Bar */}
+          <div className="border-t border-border/20 bg-background/95 sticky bottom-0 z-10 shadow-2xl">
+            <form
+              className="flex items-center gap-3 w-full px-3 md:px-6 py-3 rounded-xl bg-background/95 shadow-lg mt-2"
+              onSubmit={e => {
+                e.preventDefault();
+                handleSendMessage(inputValue);
+              }}
+              aria-label="Send a message"
+            >
+              <Input
+                ref={inputRef}
+                value={inputValue}
+                onChange={e => setInputValue(e.target.value)}
+                placeholder="Ask about your investments, tax optimization..."
+                className="flex-1 bg-background/80 border-border/50 rounded-full px-4 h-12 text-base focus:ring-2 focus:ring-primary/30 transition shadow-none"
+                disabled={isInputDisabled}
+                aria-label="Chat input"
+                maxLength={500}
+              />
+              <Button
+                type="submit"
+                className="bg-gradient-to-br from-primary to-accent hover:opacity-90 rounded-full shadow-md h-12 w-12 flex-shrink-0"
+                disabled={!inputValue.trim() || isInputDisabled}
+                aria-label="Send message"
+              >
+                <Send className="w-5 h-5" />
+              </Button>
+            </form>
           </div>
         </div>
-      )}
-    </div>
+        </div>
+        </div> {/* <-- Add this closing div before SidebarProvider closes */}
+    </SidebarProvider>
   );
 };
 
 export async function fetchVertexAIResponse(prompt: string): Promise<string> {
   const apiKey = "AIzaSyDfXXKtmlQqwklfn3EYca7gug7CvaI98vY";
-  const url = `https://generativelanguage.googleapis.com/v1beta3/models/chat-bison-001:generateMessage`;
+  const url = `https://generativelanguage.googleapis.com/v1beta3/models/chat-bison-001:generateMessage?key=${apiKey}`;
 
   const res = await fetch(url, {
     method: "POST",
