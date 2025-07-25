@@ -9,7 +9,23 @@ const Footer: React.FC<FooterProps> = ({ onTabChange }) => (
     <div className="max-w-6xl mx-auto flex flex-col items-center gap-6 md:flex-row md:items-start md:justify-between">
       <div className="flex flex-col items-center md:items-start gap-2">
         <div className="flex items-center gap-2 mb-1">
-          <img src="/FinSightAI.png" alt="FinSight Logo" className="w-8 h-8 rounded" />
+          <div className="w-8 h-8 rounded bg-gradient-primary flex items-center justify-center">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="lucide lucide-trending-up w-5 h-5 text-white"
+            >
+              <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+              <polyline points="16 7 22 7 22 13"></polyline>
+            </svg>
+          </div>
           <span className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">FinSight</span>
         </div>
         <p className="text-sm text-muted-foreground max-w-xs text-center md:text-left">

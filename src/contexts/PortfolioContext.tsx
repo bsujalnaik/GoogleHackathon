@@ -32,44 +32,42 @@ export const usePortfolio = () => useContext(PortfolioContext);
 export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [portfolio, setPortfolio] = useState<PortfolioStock[]>([]);
   const [portfolioLoading, setPortfolioLoading] = useState(true);
-  const { user, loading: userLoading } = useUser();
+  const { user } = useUser();
   const hasLoaded = useRef(false);
 
   // Load portfolio from Firestore or localStorage on mount or user change
   useEffect(() => {
     const loadPortfolio = async () => {
       setPortfolioLoading(true);
-      if (!userLoading) {
-        if (user && user.uid) {
-          // Try to load from Firestore
-          const docRef = doc(db, 'portfolios', user.uid);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            setPortfolio(docSnap.data().stocks || []);
-          } else {
+      if (user && user.uid) {
+        // Try to load from Firestore
+        const docRef = doc(db, 'portfolios', user.uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setPortfolio(docSnap.data().stocks || []);
+        } else {
+          setPortfolio([]);
+        }
+      } else {
+        // Fallback to localStorage
+        const savedPortfolio = localStorage.getItem('portfolio');
+        if (savedPortfolio) {
+          try {
+            setPortfolio(JSON.parse(savedPortfolio));
+          } catch (error) {
+            console.error('Failed to load portfolio from localStorage:', error);
             setPortfolio([]);
           }
         } else {
-          // Fallback to localStorage
-          const savedPortfolio = localStorage.getItem('portfolio');
-          if (savedPortfolio) {
-            try {
-              setPortfolio(JSON.parse(savedPortfolio));
-            } catch (error) {
-              console.error('Failed to load portfolio from localStorage:', error);
-              setPortfolio([]);
-            }
-          } else {
-            setPortfolio([]);
-          }
+          setPortfolio([]);
         }
-        setPortfolioLoading(false);
-        hasLoaded.current = true;
       }
+      setPortfolioLoading(false);
+      hasLoaded.current = true;
     };
     loadPortfolio();
     // eslint-disable-next-line
-  }, [user, userLoading]);
+  }, [user]);
 
   // Save portfolio to Firestore or localStorage whenever it changes, but skip first run after load
   useEffect(() => {
