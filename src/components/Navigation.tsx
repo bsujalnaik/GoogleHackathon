@@ -95,7 +95,23 @@ export const Navigation = ({ activeTab, onTabChange, onShowAuth }: NavigationPro
       {/* Desktop Navigation */}
       <nav className="hidden md:flex items-center justify-between p-6 bg-card/50 border-b border-border/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <img src="/FinSightAI.png" alt="FinSight Logo" className="w-10 h-10 rounded-lg" />
+          <div className="w-10 h-10 rounded-lg bg-gradient-primary flex items-center justify-center">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="lucide lucide-trending-up w-6 h-6 text-white"
+            >
+              <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+              <polyline points="16 7 22 7 22 13"></polyline>
+            </svg>
+          </div>
           <div>
             <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
               FinSight
@@ -165,7 +181,21 @@ export const Navigation = ({ activeTab, onTabChange, onShowAuth }: NavigationPro
         <div className="flex items-center justify-between p-4 bg-card/50 border-b border-border/50 backdrop-blur-sm sticky top-0 z-50">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-white" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="lucide lucide-trending-up w-5 h-5 text-white"
+              >
+                <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+                <polyline points="16 7 22 7 22 13"></polyline>
+              </svg>
             </div>
             <h1 className="text-lg font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
               FinSight

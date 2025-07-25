@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Hero } from "@/components/Hero";
-import { Dashboard } from "@/components/Dashboard";
+import Dashboard from "../components/Dashboard";
 import { AIChat } from "@/components/AIChat";
 import { Navigation } from "@/components/Navigation";
 import { AuthPage } from "./AuthPage";
@@ -8,12 +8,24 @@ import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import Settings from "@/components/Settings";
 import Footer from "@/components/Footer";
+import { db } from "@/lib/firebase";
+import { collection, onSnapshot } from "firebase/firestore";
+import { onMessage, getMessaging } from "firebase/messaging";
+
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState("home");
   const [showAuth, setShowAuth] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [previousTab, setPreviousTab] = useState("home");
+  // Alerts state and effect at top level
+  const [alerts, setAlerts] = useState([]);
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "alerts"), (snapshot) => {
+      setAlerts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -58,18 +70,16 @@ const Index = () => {
             <div className="max-w-4xl mx-auto">
               <h1 className="text-2xl font-bold mb-6">Smart Alerts</h1>
               <div className="space-y-4">
-                <div className="p-4 bg-gradient-card border border-border/50 rounded-lg">
-                  <h3 className="font-semibold text-yellow-500 mb-2">⚡ Tax Deadline Alert</h3>
-                  <p className="text-sm text-muted-foreground">
-                    LTCG harvesting opportunity for RELIANCE expires in 15 days. Potential savings: ₹25K
-                  </p>
-                </div>
-                <div className="p-4 bg-gradient-card border border-border/50 rounded-lg">
-                  <h3 className="font-semibold text-green-500 mb-2">💡 New Opportunity</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Market dip detected. Consider tax-loss harvesting for TATASTEEL to save ₹18K
-                  </p>
-                </div>
+                {alerts.length === 0 ? (
+                  <div className="text-muted-foreground">No alerts yet.</div>
+                ) : (
+                  alerts.map(alert => (
+                    <div key={alert.id} className="p-4 bg-gradient-card border border-border/50 rounded-lg">
+                      <h3 className="font-semibold mb-2">{alert.title}</h3>
+                      <p className="text-sm text-muted-foreground">{alert.body}</p>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
